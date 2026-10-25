@@ -1,0 +1,487 @@
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum AccountStatus {
+  PENDING_ACTIVATION
+  ACTIVE
+  SUSPENDED
+  REVOKED
+}
+
+enum Role {
+  SUPER_ADMIN
+  EDITOR
+  VOLUNTEER_COORDINATOR
+}
+
+enum ContentStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum ProgrammeCategory {
+  YOUTH_EMPOWERMENT
+  EDUCATION_DIGITAL_LITERACY
+  SKILL_DEVELOPMENT
+  WOMEN_EMPOWERMENT
+  RURAL_DEVELOPMENT
+  ENVIRONMENT_SUSTAINABILITY
+  COMMUNITY_DEVELOPMENT
+  ANIMAL_WELFARE
+}
+
+model AdminUser {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  username     String?       @unique
+  name         String
+  passwordHash String
+  role         Role          @default(EDITOR)
+  appRoleId    String?
+  appRole      AppRole?      @relation(fields: [appRoleId], references: [id], onDelete: SetNull)
+  status       AccountStatus @default(PENDING_ACTIVATION)
+  isActive     Boolean       @default(true)
+  emailVerified Boolean      @default(false)
+  emailVerifiedAt DateTime?
+  activatedAt  DateTime?
+  passwordChangedAt DateTime?
+  lastLoginAt  DateTime?
+  totpSecret   String?
+  totpEnabled  Boolean       @default(false)
+  otpEnabled   Boolean       @default(false) // Per-administrator Email OTP toggle (Super Admin controllable)
+  recoveryCodes String[]     @default([])
+  activationTokenHash String?
+  activationTokenExpiresAt DateTime?
+  invitedAt    DateTime?
+  invitedBy    String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  auditLogs    AuditLog[]
+
+  @@index([email])
+  @@index([username])
+  @@index([appRoleId])
+  @@index([activationTokenHash])
+  @@index([status])
+}
+
+model AppRole {
+  id          String           @id @default(cuid())
+  name        String           @unique
+  code        String           @unique
+  description String?
+  isSystem    Boolean          @default(false)
+  permissions RolePermission[]
+  users       AdminUser[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([code])
+}
+
+model Permission {
+  id          String           @id @default(cuid())
+  action      String           @unique
+  module      String
+  description String?
+  roles       RolePermission[]
+
+  @@index([action])
+  @@index([module])
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         AppRole    @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model MediaAsset {
+  id               String   @id @default(cuid())
+  cloudinaryId     String   @unique
+  publicId         String
+  secureUrl        String
+  format           String
+  width            Int?
+  height           Int?
+  bytes            Int?
+  originalFilename String?
+  title            String?
+  altText          String?
+  caption          String?
+  folder           String   @default("ysif")
+  uploadedBy       String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([publicId])
+  @@index([folder])
+}
+
+model LeadershipProfile {
+  id              String        @id @default(cuid())
+  slug            String        @unique
+  fullName        String
+  roleType        String        // "FOUNDER", "CO_FOUNDER", "TRUSTEE", "DIRECTOR", "ADVISOR", "EXECUTIVE", "TEAM"
+  designation     String
+  portraitUrl     String
+  signatureUrl    String?
+  shortIntro      String?
+  biography       String        @db.Text
+  founderMessage  String?       @db.Text
+  responsibilities String[]     @default([])
+  linkedinUrl     String?
+  twitterUrl      String?
+  email           String?
+  displayOrder    Int           @default(0)
+  isFeatured      Boolean       @default(false)
+  status          ContentStatus @default(PUBLISHED)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([roleType, status])
+  @@index([displayOrder])
+}
+
+model HomepageSection {
+  id           String   @id // 'announcement', 'hero', 'intro', 'programmes', 'impact', 'stories', 'gallery', 'governance', 'events', 'transparency', 'volunteer', 'partners', 'cta'
+  title        String
+  subtitle     String?
+  content      Json?    // rich section configuration (headings, URLs, image presets)
+  displayOrder Int      @default(0)
+  isVisible    Boolean  @default(true)
+  updatedAt    DateTime @updatedAt
+
+  @@index([displayOrder])
+}
+
+model NavigationItem {
+  id         String           @id @default(cuid())
+  label      String
+  href       String
+  order      Int              @default(0)
+  isVisible  Boolean          @default(true)
+  isExternal Boolean          @default(false)
+  parentId   String?
+  parent     NavigationItem?  @relation("NavHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children   NavigationItem[] @relation("NavHierarchy")
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  @@index([order])
+  @@index([parentId])
+}
+
+model Partner {
+  id           String   @id @default(cuid())
+  name         String
+  category     String   // "Academic", "Corporate CSR", "Panchayat / Public", "Civil Society"
+  logoUrl      String
+  websiteUrl   String?
+  description  String?
+  displayOrder Int      @default(0)
+  isVisible    Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([category, isVisible])
+  @@index([displayOrder])
+}
+
+model SocialProfile {
+  id           String   @id @default(cuid())
+  platform     String   // "LinkedIn", "Instagram", "Facebook", "X", "YouTube"
+  url          String
+  displayOrder Int      @default(0)
+  isVisible    Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([displayOrder])
+}
+
+model Programme {
+  id           String            @id @default(cuid())
+  slug         String            @unique
+  title        String
+  tagline      String
+  category     ProgrammeCategory
+  summary      String            @db.Text
+  description  String            @db.Text
+  objectives   String[]
+  targetGroup  String
+  location     String
+  coverImage   String
+  status       ContentStatus     @default(DRAFT)
+  isFeatured   Boolean           @default(false)
+  displayOrder Int               @default(0)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@index([category, status])
+  @@index([slug])
+}
+
+model Story {
+  id          String        @id @default(cuid())
+  slug        String        @unique
+  title       String
+  excerpt     String        @db.Text
+  content     String        @db.Text
+  coverImage  String
+  category    String
+  authorName  String        @default("Youth Spark Editorial Team")
+  status      ContentStatus @default(DRAFT)
+  publishedAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([slug])
+  @@index([status, publishedAt])
+}
+
+model Event {
+  id          String        @id @default(cuid())
+  slug        String        @unique
+  title       String
+  summary     String        @db.Text
+  description String        @db.Text
+  location    String
+  startDate   DateTime
+  endDate     DateTime?
+  isVirtual   Boolean       @default(false)
+  rsvpLink    String?
+  coverImage  String
+  status      ContentStatus @default(DRAFT)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([startDate])
+  @@index([status])
+}
+
+model GalleryAlbum {
+  id          String         @id @default(cuid())
+  slug        String         @unique
+  title       String
+  description String?
+  coverImage  String
+  status      ContentStatus  @default(PUBLISHED)
+  items       GalleryItem[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+model GalleryItem {
+  id          String       @id @default(cuid())
+  albumId     String
+  album       GalleryAlbum @relation(fields: [albumId], references: [id], onDelete: Cascade)
+  title       String
+  caption     String?
+  imageUrl    String
+  altText     String
+  order       Int          @default(0)
+  createdAt   DateTime     @default(now())
+
+  @@index([albumId])
+  @@index([order])
+}
+
+model ImpactMetric {
+  id           String   @id @default(cuid())
+  label        String
+  value        String
+  description  String
+  isVerified   Boolean  @default(true)
+  period       String
+  displayOrder Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([displayOrder])
+}
+
+model PublicDocument {
+  id           String        @id @default(cuid())
+  title        String
+  category     String
+  fileUrl      String
+  fileSize     String?
+  fileType     String        @default("PDF")
+  version      String        @default("1.0")
+  status       ContentStatus @default(PUBLISHED)
+  publishedAt  DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([category, status])
+}
+
+model ContactEnquiry {
+  id          String   @id @default(cuid())
+  fullName    String
+  email       String
+  phone       String?
+  type        String
+  subject     String
+  message     String   @db.Text
+  isRead      Boolean  @default(false)
+  ipHash      String?
+  createdAt   DateTime @default(now())
+
+  @@index([isRead, createdAt])
+}
+
+model SiteSetting {
+  id                 String   @id @default("default")
+  orgName            String   @default("YOUTH SPARK INDIA FOUNDATION")
+  tagline            String   @default("Igniting Potential, Empowering Futures.")
+  noticeBanner       String?
+  noticeActive       Boolean  @default(false)
+  contactEmail       String   @default("contact@youthsparkindia.org")
+  contactPhone       String?
+  officeAddress      String?
+  facebookUrl        String?
+  instagramUrl       String?
+  linkedinUrl        String?
+  twitterUrl         String?
+  youtubeUrl         String?
+  footerTagline      String?
+  footerDescription  String?
+  copyrightText      String?
+  metaTitle          String?
+  metaDescription    String?
+  canonicalUrl               String?
+  ogImageUrl                 String?
+  globalTwoFactorEnforced    Boolean  @default(false)
+  twoFactorMethod            String   @default("TOTP_OR_EMAIL")
+  superAdminAlwaysEnforce2FA Boolean  @default(true)
+  cookiePolicyVersion        String   @default("2026.1")
+  updatedAt                  DateTime @updatedAt
+}
+
+model AuditLog {
+  id            String     @id @default(cuid())
+  userId        String?
+  user          AdminUser? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  actorEmail    String?
+  actorName     String?
+  actorRole     String?
+  action        String
+  category      String     @default("GENERAL") // AUTH, ADMIN_MANAGEMENT, MEDIA, CMS_EDIT, SECURITY, SYSTEM
+  entity        String
+  entityId      String?
+  targetLabel   String?
+  details       String?    @db.Text
+  outcome       String     @default("SUCCESS") // SUCCESS, FAILURE, DENIED
+  ipAddress     String?
+  userAgent     String?
+  metadata      Json?
+  failureReason String?
+  createdAt     DateTime   @default(now())
+
+  @@index([action, createdAt])
+  @@index([category, createdAt])
+  @@index([userId, createdAt])
+  @@index([entity, entityId])
+}
+
+model AuditDeletionLog {
+  id               String   @id @default(cuid())
+  deletedByUserId  String?
+  deletedByEmail   String
+  deletedByName    String?
+  deletedByRole    String   // Must be SUPER_ADMIN
+  recordCount      Int
+  deletedRecordIds String[] @default([])
+  reason           String   @db.Text
+  filterCriteria   Json?
+  ipAddress        String?
+  userAgent        String?
+  deletedAt        DateTime @default(now())
+
+  @@index([deletedAt])
+  @@index([deletedByEmail])
+}
+
+model OtpChallenge {
+  id        String   @id @default(cuid())
+  userId    String
+  email     String
+  codeHash  String
+  expiresAt DateTime
+  attempts  Int      @default(0)
+  verified  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([email, expiresAt])
+}
+
+model Testimonial {
+  id                  String   @id @default(cuid())
+  quote               String   @db.Text
+  authorName          String
+  roleOrTitle         String
+  location            String?
+  avatarUrl           String?
+  programmeOrCategory String?
+  displayOrder        Int      @default(0)
+  isVisible           Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([isVisible, displayOrder])
+}
+
+model PageContent {
+  slug             String         @id // 'about', 'impact', 'privacy-policy', 'terms-of-use', 'accessibility'
+  title            String
+  subtitle         String?
+  content          String         @db.Text // Legacy markdown content
+  draftContent     Json?          // Structured block-based editor uncommitted draft
+  publishedContent Json?          // Structured block-based editor live published version
+  schemaVersion    Int            @default(1)
+  version          Int            @default(1) // Optimistic concurrency control
+  heroImage        String?
+  metaTitle        String?
+  metaDescription  String?
+  publishedAt      DateTime?
+  publishedBy      String?
+  draftUpdatedAt   DateTime?
+  draftUpdatedBy   String?
+  updatedAt        DateTime       @updatedAt
+  revisions        PageRevision[]
+}
+
+model PageRevision {
+  id              String      @id @default(cuid())
+  pageSlug        String
+  version         Int
+  title           String
+  subtitle        String?
+  content         String?     @db.Text
+  blocks          Json
+  heroImage       String?
+  metaTitle       String?
+  metaDescription String?
+  createdById     String?
+  createdByName   String?
+  changeSummary   String?
+  createdAt       DateTime    @default(now())
+
+  page            PageContent @relation(fields: [pageSlug], references: [slug], onDelete: Cascade)
+
+  @@index([pageSlug, version])
+  @@index([pageSlug, createdAt])
+}
+

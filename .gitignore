@@ -1,0 +1,57 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+.yarn/install-state.gz
+
+# Next.js Build Outputs
+.next/
+out/
+build/
+dist/
+
+# Testing & Coverage
+coverage/
+*.lcov
+
+# Environment files (Never commit secret-bearing credentials!)
+.env
+.env.*
+!.env.example
+
+# Vercel Deployment Metadata
+.vercel
+
+# Certificates & Private Keys
+*.pem
+*.key
+*.cert
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# TypeScript cache
+*.tsbuildinfo
+next-env.d.ts
+
+# OS & Editor files
+.DS_Store
+Thumbs.db
+powershell.exe
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+
+# Documentation & AI agent rules (Only README.md & Deployment.md are tracked)
+docs/
+AGENTS.md
+
+# Exclude automated test suites
+tests/
+
+
